@@ -1,0 +1,62 @@
+version: '2'
+
+services:
+  zookeeper:
+    image: 'bitnami/zookeeper:3'
+    ports:
+      - '2181:2181'
+    volumes:
+      - 'zookeeper_data:/bitnami'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:2'
+    ports:
+      - '9092:9092'
+    volumes:
+      - 'kafka_data:/bitnami'
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    #command: /opt/bitnami/kafka/bin/kafka-topics.sh --create --zookeeper zookeeper:2181 --topic LoadLink --partitions 1 --replication-factor 1
+  mysql:
+    image: 'mysql'
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - '3306:3306'
+    volumes:
+      - './sql-scripts:/docker-entrypoint-initdb.d'
+    
+  userserver:
+    build: './'
+    ports:
+      - '8080:8080'
+    command: ["go","run", "cmd/userserver/main.go"]
+    depends_on:
+      - kafka
+      - mysql
+    volumes:
+      - archive_data:/go/src/github.com/kbuci/text-hosting-mock/archive
+
+  jobconsumer:
+    build: './'
+    command: ["go","run", "cmd/jobconsumer/main.go"]
+    depends_on:
+      - mysql
+      - kafka
+    volumes:
+      - archive_data:/go/src/github.com/kbuci/text-hosting-mock/archive
+
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+  archive_data:
