@@ -138,7 +138,7 @@ func (adapter *DataAdapter) InitLinkData(title, link string) (uint64, error) {
 		if !ok {
 			return 0, err
 		}
-		// primary key violation
+		// primary key violation, happens if uuid is already assigned
 		if sqlErr.Number == 2627 {
 			curTime = time.Now().Unix()
 			id = generateId(title, curTime)

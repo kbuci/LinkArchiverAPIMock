@@ -33,7 +33,7 @@ type UserServer struct {
 
 const (
 	BadRequestMsg       = "Ill-formed API request"
-	BadUploadMsg        = "Issue archiving file"
+	BadUploadMsg        = "Issue downloading file from URL"
 	IncompleteUploadMsg = "File not ready yet"
 	NotFoundMsg         = "File/ID not valid"
 )

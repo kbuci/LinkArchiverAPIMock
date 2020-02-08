@@ -27,7 +27,7 @@ func NewConsumer() *JobConsumer {
 	return &JobConsumer{consumer, dataadapter.NewDataAdapter()}
 }
 
-func (c *JobConsumer) ConsumeLinkJob(message []byte) error {
+func (c *JobConsumer) ArchiveLinkJob(message []byte) error {
 	var linkJob LinkCopyData
 	err := json.Unmarshal(message, &linkJob)
 	if err != nil {
@@ -41,26 +41,47 @@ func (c *JobConsumer) ConsumeLinkJob(message []byte) error {
 	return c.Adapter.UpdateLinkUploaded(linkJob.Id, linkJob.Link, archive_location, dataadapter.SuccessfulUpload)
 }
 
-func (c *JobConsumer) JobProcessor(msgQueue <-chan *kafka.Message) *sync.WaitGroup {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for msg := range msgQueue {
-			err := c.ConsumeLinkJob(msg.Value)
-			if err != nil {
-				fmt.Printf("Consumer Update value error: %v (%v)\n", err, msg)
+func (c *JobConsumer) JobProcessor(workers int, msgQueue <-chan *kafka.Message) *sync.WaitGroup {
+	var jobGroup sync.WaitGroup
+	jobGroup.Add(workers)
+	markConsumedQueue := make(chan *kafka.Message)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer jobGroup.Done()
+			for msg := range msgQueue {
+				err := c.ArchiveLinkJob(msg.Value)
+				if err != nil {
+					fmt.Printf("Consumer Update value error: %v (%v)\n", err, msg)
+				}
+				markConsumedQueue <- msg
 			}
-		}
 
+		}()
+	}
+
+	go func() {
+		jobGroup.Wait()
+		close(markConsumedQueue)
+	}()
+	// Needed to enforce at least once processing and also avoid multiple threads commiting messages
+	// at the same time. Using a channel/job queue is a straightforward approach to
+	// allow committing the message and processing the next job to happen concurrently
+	var markConsumedGroup sync.WaitGroup
+	markConsumedGroup.Add(1)
+	go func() {
+		defer markConsumedGroup.Done()
+		for msg := range markConsumedQueue {
+			c.Consumer.CommitMessage(msg)
+		}
 	}()
 
-	return &wg
+	return &markConsumedGroup
 }
 
 func (c *JobConsumer) ListenJobs() {
 	msgQueue := make(chan *kafka.Message)
-	barrier := c.JobProcessor(msgQueue)
+	saveConsumedJobsWorker := c.JobProcessor(1, msgQueue)
+
 	for {
 		msg, err := c.Consumer.ReadMessage(-1)
 		if err == nil {
@@ -72,6 +93,6 @@ func (c *JobConsumer) ListenJobs() {
 			break
 		}
 	}
-	barrier.Wait()
+	saveConsumedJobsWorker.Wait()
 	c.Consumer.Close()
 }
