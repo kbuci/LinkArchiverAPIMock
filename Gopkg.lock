@@ -18,6 +18,14 @@
   version = "v1.7.3"
 
 [[projects]]
+  digest = "1:e2933734cc52e2c304ed132ba5a8320ef21bee5022c67302abb3eeef83d6c515"
+  name = "github.com/temoto/robotstxt"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3f668f68d41cf91350a4148f4fcb6720f1472428"
+  version = "v1.1.1"
+
+[[projects]]
   digest = "1:c25289f43ac4a68d88b02245742347c94f1e108c534dda442188015ff80669b3"
   name = "google.golang.org/appengine"
   packages = ["cloudsql"]
@@ -39,6 +47,7 @@
   input-imports = [
     "github.com/go-sql-driver/mysql",
     "github.com/gorilla/mux",
+    "github.com/temoto/robotstxt",
     "gopkg.in/confluentinc/confluent-kafka-go.v1/kafka",
   ]
   solver-name = "gps-cdcl"
