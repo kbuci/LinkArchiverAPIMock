@@ -11,11 +11,17 @@ type JobProducer struct {
 }
 
 var LoadLinkTopic string = "LoadLink"
+var DelayLinkTopic string = "DelayLoadLink"
 
 type LinkCopyData struct {
-	Title string
-	Link  string
-	Id    uint64
+	Link string
+	Id   uint64
+}
+
+type LinkDelayData struct {
+	Link          string
+	Id            uint64
+	WaitUntilTime int64
 }
 
 func NewProducer() *JobProducer {
@@ -26,9 +32,8 @@ func NewProducer() *JobProducer {
 	return &JobProducer{producer}
 }
 
-func (p *JobProducer) QueueLinkCopyJob(id uint64, title, link string) error {
+func (p *JobProducer) QueueLinkCopyJob(id uint64, link string) error {
 	message := LinkCopyData{
-		title,
 		link,
 		id,
 	}
@@ -37,6 +42,21 @@ func (p *JobProducer) QueueLinkCopyJob(id uint64, title, link string) error {
 	jsonMessage, _ := json.Marshal(message)
 	return p.Producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &LoadLinkTopic, Partition: kafka.PartitionAny},
+		Value:          jsonMessage,
+	}, nil)
+}
+
+func (p *JobProducer) QueueLinkDelayJob(id uint64, link string, waitUntil int64) error {
+	message := LinkDelayData{
+		link,
+		id,
+		waitUntil,
+	}
+
+	//partition := int32(id)
+	jsonMessage, _ := json.Marshal(message)
+	return p.Producer.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: &DelayLinkTopic, Partition: kafka.PartitionAny},
 		Value:          jsonMessage,
 	}, nil)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kbuci/text-hosting-mock/dataadapter"
+	"github.com/kbuci/multiuser-weblink-store/dataadapter"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -33,6 +33,7 @@ func (c *JobConsumer) ArchiveLinkJob(message []byte) error {
 	if err != nil {
 		panic(err)
 	}
+
 	archive_location, err := archiveFile(&linkJob)
 	if err != nil {
 		fmt.Printf("File archiving error: %s (%v)\n", linkJob.Link, err)
@@ -44,11 +45,14 @@ func (c *JobConsumer) ArchiveLinkJob(message []byte) error {
 func (c *JobConsumer) JobProcessor(workers int, msgQueue <-chan *kafka.Message) *sync.WaitGroup {
 	var jobGroup sync.WaitGroup
 	jobGroup.Add(workers)
+	msgQueuePartition := make([]chan *kafka.Message, workers)
 	markConsumedQueue := make(chan *kafka.Message)
 	for i := 0; i < workers; i++ {
+		worker_index := i
 		go func() {
 			defer jobGroup.Done()
-			for msg := range msgQueue {
+			msgQueuePartition[worker_index] = make(chan *kafka.Message)
+			for msg := range msgQueuePartition[worker_index] {
 				err := c.ArchiveLinkJob(msg.Value)
 				if err != nil {
 					fmt.Printf("Consumer Update value error: %v (%v)\n", err, msg)
@@ -58,6 +62,14 @@ func (c *JobConsumer) JobProcessor(workers int, msgQueue <-chan *kafka.Message) 
 
 		}()
 	}
+	go func() {
+		for msg := range msgQueue {
+			msgQueuePartition[int(msg.TopicPartition.Partition)%workers] <- msg
+		}
+		for _, queue := range msgQueuePartition {
+			close(queue)
+		}
+	}()
 
 	go func() {
 		jobGroup.Wait()
@@ -86,7 +98,11 @@ func (c *JobConsumer) ListenJobs() {
 		msg, err := c.Consumer.ReadMessage(-1)
 		if err == nil {
 			fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
-			msgQueue <- msg
+			topic := msg.TopicPartition.Topic
+			if *topic == LoadLinkTopic {
+
+				msgQueue <- msg
+			}
 		} else {
 			fmt.Printf("Consumer error: %v (%v)\n", err, msg)
 			close(msgQueue)

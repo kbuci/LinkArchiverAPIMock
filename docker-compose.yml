@@ -42,7 +42,7 @@ services:
       - kafka
       - mysql
     volumes:
-      - archive_data:/go/src/github.com/kbuci/text-hosting-mock/archive
+      - archive_data:/go/src/github.com/kbuci/multiuser-weblink-store/archive
 
   jobconsumer:
     build: './'
@@ -51,7 +51,7 @@ services:
       - mysql
       - kafka
     volumes:
-      - archive_data:/go/src/github.com/kbuci/text-hosting-mock/archive
+      - archive_data:/go/src/github.com/kbuci/multiuser-weblink-store/archive
 
 
 volumes:

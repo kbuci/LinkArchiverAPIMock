@@ -15,7 +15,7 @@ RUN make
 RUN make install
 
 # Copy the code from the host and compile it
-WORKDIR $GOPATH/src/github.com/kbuci/text-hosting-mock
+WORKDIR $GOPATH/src/github.com/kbuci/multiuser-weblink-store
 COPY Gopkg.toml Gopkg.lock ./
 RUN dep ensure --vendor-only
 COPY . ./

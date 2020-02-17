@@ -8,7 +8,12 @@ import (
 )
 
 func archiveFile(linkData *LinkCopyData) (string, error) {
-	resp, err := http.Get(linkData.Link)
+	archiver_client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}
+
+	resp, err := archiver_client.Get(linkData.Link)
 
 	if err != nil {
 		return "", err

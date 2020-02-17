@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/kbuci/text-hosting-mock/userserver"
+	"github.com/kbuci/multiuser-weblink-store/userserver"
 )
 
 func healthcheck(w http.ResponseWriter, r *http.Request) {

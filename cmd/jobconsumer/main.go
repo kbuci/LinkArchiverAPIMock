@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/kbuci/text-hosting-mock/jobqueue"
+	"github.com/kbuci/multiuser-weblink-store/jobqueue"
 )
 
 func main() {

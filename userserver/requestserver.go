@@ -6,24 +6,27 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/kbuci/text-hosting-mock/dataadapter"
-	"github.com/kbuci/text-hosting-mock/jobqueue"
+	"github.com/kbuci/multiuser-weblink-store/dataadapter"
+	"github.com/kbuci/multiuser-weblink-store/jobqueue"
 )
 
 type TextBody struct {
-	Title string `json:"title"`
-	Text  string `json:"text"`
+	AliveMinutes int64  `json:"alive_minutes"`
+	Text         string `json:"text"`
+	Id           uint64 `json:"id"`
 }
 
 type LinkBody struct {
-	Title string `json:"title"`
-	Link  string `json:"link"`
+	AliveMinutes int64  `json:"alive_minutes"`
+	Link         string `json:"link"`
+	Id           uint64 `json:"id"`
 }
 
-type IdBody struct {
-	Id uint64 `json:"id"`
+type StoreRequestBody struct {
+	Error string `json:"error"`
 }
 
 type UserServer struct {
@@ -36,6 +39,7 @@ const (
 	BadUploadMsg        = "Issue downloading file from URL"
 	IncompleteUploadMsg = "File not ready yet"
 	NotFoundMsg         = "File/ID not valid"
+	IdNotClaimed        = "ID not claimed"
 )
 
 func (server *UserServer) StoreData(w http.ResponseWriter, r *http.Request) {
@@ -52,11 +56,15 @@ func (server *UserServer) StoreData(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, BadRequestMsg, http.StatusBadRequest)
 		return
 	}
-	log.Printf(storeData.Title)
-	claimedId, err := server.Adapter.StoreTextData(storeData.Title, storeData.Text)
+	log.Print(storeData.AliveMinutes)
+	claimed, err := server.Adapter.StoreTextData(storeData.AliveMinutes, storeData.Text, storeData.Id)
 	if err == nil {
 		w.WriteHeader(200)
-		json.NewEncoder(w).Encode(IdBody{claimedId})
+		if !claimed {
+			json.NewEncoder(w).Encode(StoreRequestBody{IdNotClaimed})
+		} else {
+			json.NewEncoder(w).Encode(StoreRequestBody{})
+		}
 
 	} else {
 		log.Printf(err.Error())
@@ -75,7 +83,7 @@ func (server *UserServer) GetTextData(w http.ResponseWriter, r *http.Request) {
 
 	data, err := server.Adapter.ReadTextData(id)
 	if err == nil {
-		js, _ := json.Marshal(TextBody{Title: data})
+		js, _ := json.Marshal(TextBody{Text: data})
 		w.WriteHeader(200)
 		w.Write(js)
 
@@ -128,22 +136,35 @@ func (server *UserServer) InitLinkData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf(storeData.Link)
-	claimedId, err := server.Adapter.InitLinkData(storeData.Title, storeData.Link)
+	claimed, err := server.Adapter.InitLinkData(storeData.AliveMinutes, storeData.Link, storeData.Id)
 	if err != nil {
 		log.Printf(err.Error())
 		http.Error(w, "Internal error", http.StatusInsufficientStorage)
 		return
+	} else {
+		w.WriteHeader(200)
+		if !claimed {
+			json.NewEncoder(w).Encode(StoreRequestBody{IdNotClaimed})
+		} else {
+			json.NewEncoder(w).Encode(StoreRequestBody{})
+		}
 	}
 
-	err = server.Producer.QueueLinkCopyJob(claimedId, storeData.Title, storeData.Link)
+	timeLeft, err := server.Adapter.TimeUntilDomainPoll(storeData.Link)
+	if timeLeft == 0 {
+		err = server.Producer.QueueLinkCopyJob(storeData.Id, storeData.Link)
+	} else {
+		err = server.Producer.QueueLinkDelayJob(storeData.Id, storeData.Link, timeLeft+time.Now().Unix())
+	}
 	if err == nil {
 		w.WriteHeader(200)
-		json.NewEncoder(w).Encode(IdBody{claimedId})
+		json.NewEncoder(w).Encode(StoreRequestBody{})
 
 	} else {
 		log.Printf(err.Error())
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 	}
+
 	log.Printf("queued %s", storeData.Link)
 }
 
